@@ -1,22 +1,22 @@
 package com.jomlom.recipebookaccess.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
-public record RequestItemsPayload(int i) implements CustomPayload {
+public record RequestItemsPayload(int i) implements CustomPacketPayload {
 
-    public static final CustomPayload.Id<RequestItemsPayload> ID = new CustomPayload.Id<>(NetworkConstants.REQUEST_ITEMS_PACKET_ID);
+    public static final CustomPacketPayload.Type<RequestItemsPayload> ID = new CustomPacketPayload.Type<>(NetworkConstants.REQUEST_ITEMS_PACKET_ID);
 
-    public static final PacketCodec<RegistryByteBuf, RequestItemsPayload> CODEC =
-            PacketCodec.tuple(
-                    PacketCodecs.INTEGER, RequestItemsPayload::i,
+    public static final StreamCodec<RegistryFriendlyByteBuf, RequestItemsPayload> CODEC =
+            StreamCodec.composite(
+                    ByteBufCodecs.INT, RequestItemsPayload::i,
                     RequestItemsPayload::new
             );
 
     @Override
-    public Id<? extends CustomPayload> getId() {
+    public Type<? extends CustomPacketPayload> type() {
         return ID;
     }
 }

@@ -1,11 +1,11 @@
 package com.jomlom.recipebookaccess.api;
 
-import net.minecraft.inventory.Inventory;
 import java.util.List;
+import net.minecraft.world.Container;
 
 public interface RecipeBookInventoryProvider {
 
-    List<Inventory> getInventoriesForAutofill();
+    List<Container> getInventoriesForAutofill();
 
     default boolean persistentInventory() {
         return false;

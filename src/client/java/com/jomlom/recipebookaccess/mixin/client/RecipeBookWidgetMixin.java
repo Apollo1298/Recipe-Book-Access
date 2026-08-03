@@ -5,60 +5,58 @@ import com.jomlom.recipebookaccess.network.ClientItemsReciever;
 import com.jomlom.recipebookaccess.network.RequestItemsPayload;
 import com.jomlom.recipebookaccess.util.RecipeBookAccessUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.screen.recipebook.RecipeBookWidget;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.RecipeFinder;
-import net.minecraft.screen.AbstractRecipeScreenHandler;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.StackedItemContents;
+import net.minecraft.world.inventory.RecipeBookMenu;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-import java.lang.reflect.Field;
 import java.util.List;
 
-@Mixin(RecipeBookWidget.class)
+@Mixin(RecipeBookComponent.class)
 public abstract class RecipeBookWidgetMixin {
 
 	@Redirect(
-			method = "refreshInputs",
+			method = "updateStackedContents",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/entity/player/PlayerInventory;populateRecipeFinder(Lnet/minecraft/recipe/RecipeFinder;)V"
+					target = "Lnet/minecraft/world/entity/player/Inventory;fillStackedContents(Lnet/minecraft/world/entity/player/StackedItemContents;)V"
 			)
 	)
-	private void redirectPopulateRecipeFinderRefresh(PlayerInventory inventory, RecipeFinder recipeFinder) {
+	private void redirectPopulateRecipeFinderRefresh(Inventory inventory, StackedItemContents recipeFinder) {
 		redirect(inventory, recipeFinder);
 	}
 
 	@Redirect(
-			method = "reset",
+			method = "initVisuals",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/entity/player/PlayerInventory;populateRecipeFinder(Lnet/minecraft/recipe/RecipeFinder;)V"
+					target = "Lnet/minecraft/world/entity/player/Inventory;fillStackedContents(Lnet/minecraft/world/entity/player/StackedItemContents;)V"
 			)
 	)
-	private void redirectPopulateRecipeFinderReset(PlayerInventory inventory, RecipeFinder recipeFinder) {
+	private void redirectPopulateRecipeFinderReset(Inventory inventory, StackedItemContents recipeFinder) {
 		redirect(inventory, recipeFinder);
 	}
 
 	@Unique
-	private void redirect(PlayerInventory inventory, RecipeFinder recipeFinder) {
-		RecipeBookWidget<?> widget = (RecipeBookWidget<?>)(Object)this;
+	private void redirect(Inventory inventory, StackedItemContents recipeFinder) {
+		RecipeBookComponent<?> widget = (RecipeBookComponent<?>)(Object)this;
 
-		AbstractRecipeScreenHandler handler =
-				((RecipeBookWidgetAccessor)widget).getCraftingScreenHandler();
+		RecipeBookMenu handler = ((RecipeBookWidgetAccessor)widget).getMenu();
 
 		if (handler instanceof RecipeBookInventoryProvider) {
 			ClientPlayNetworking.send(new RequestItemsPayload(1));
 			ClientItemsReciever.setOnUpdate(() -> {
 				List<ItemStack> updatedItems = ClientItemsReciever.getItemStacks();
 				RecipeBookAccessUtils.populateCustomRecipeFinder(recipeFinder, updatedItems);
-				widget.refresh();
+				widget.recipesUpdated();
 			});
 		} else {
-			inventory.populateRecipeFinder(recipeFinder);
+			inventory.fillStackedContents(recipeFinder);
 		}
 	}
 

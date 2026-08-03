@@ -3,15 +3,16 @@
 	"id": "recipebookaccess",
 	"version": "${version}",
 	"name": "Recipe Book Access",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "An effortless Fabric API enabling recipe-book crafting from customizable external inventories.",
 	"authors": [
-		"Me!"
+		"Jomlom"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://modrinth.com/mod/recipe-book-access-api",
+		"sources": "https://github.com/Jomlom/Recipe-Book-Access",
+		"issues": "https://github.com/Jomlom/Recipe-Book-Access/issues"
 	},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"icon": "assets/recipebookaccess/icon.png",
 	"environment": "*",
 	"entrypoints": {
@@ -30,12 +31,9 @@
 		}
 	],
 	"depends": {
-		"fabricloader": ">=0.16.10",
-		"minecraft": ">=1.21.2 <=1.21.11",
-		"java": ">=21",
+		"fabricloader": ">=0.19.3",
+		"minecraft": "26.2",
+		"java": ">=25",
 		"fabric-api": "*"
-	},
-	"suggests": {
-		"another-mod": "*"
 	}
 }

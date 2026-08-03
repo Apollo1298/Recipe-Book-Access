@@ -17,8 +17,8 @@ public class RecipeBookAccess implements ModInitializer {
 	@Override
 	public void onInitialize() {
 
-		PayloadTypeRegistry.playS2C().register(CustomItemsPayload.ID, CustomItemsPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(RequestItemsPayload.ID, RequestItemsPayload.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(CustomItemsPayload.ID, CustomItemsPayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(RequestItemsPayload.ID, RequestItemsPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(RequestItemsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {

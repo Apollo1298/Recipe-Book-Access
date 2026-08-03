@@ -1,7 +1,7 @@
 package com.jomlom.recipebookaccess.network;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.item.ItemStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,7 +14,7 @@ public class ClientItemsReciever {
         onUpdate = callback;
     }
 
-    public static void recieveItems(MinecraftClient client, List<ItemStack> items) {
+    public static void recieveItems(Minecraft client, List<ItemStack> items) {
         client.execute(() -> {
             itemStacks = new ArrayList<>(items);
             if (onUpdate != null) {

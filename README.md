@@ -26,7 +26,7 @@ repositories {
 dependencies {
     // existing dependencies block
 
-    modImplementation("maven.modrinth:recipe-book-access-api:<mod_version>")
+    implementation("maven.modrinth:recipe-book-access-api:<mod_version>")
 }
 ```
 Replace `<mod_version>` with the version number of Recipe Book Access you wish to use (e.g. `1.0.0`).
@@ -55,11 +55,11 @@ Code Example:
 import com.jomlom.recipebookaccess.api.RecipeBookInventoryProvider
 
 // Implement it like this
-public class YourCraftingScreenHandler extends AbstractRecipeScreenHandler implements RecipeBookInventoryProvider {
+public class YourCraftingMenu extends RecipeBookMenu implements RecipeBookInventoryProvider {
     // your existing code...
 
     @Override
-    public List<Inventory> getInventoriesForAutofill() {
+    public List<Container> getInventoriesForAutofill() {
 
         // Return the list of inventories that you want recipe book to use
         return List.of(chestInventory, customStorageInventory);
@@ -78,19 +78,19 @@ This is the only function you must override for the full functionality of Recipe
 Example Implementation:
 ```java
 @Override
-    public List<Inventory> getInventoriesForAutofill() {
+    public List<Container> getInventoriesForAutofill() {
 
-    List<Inventory> inventories = new ArrayList<>();
-        BlockPos origin = this.blockEntity.getPos();
+    List<Container> inventories = new ArrayList<>();
+        BlockPos origin = this.blockEntity.getBlockPos();
 
         // Iterate over all block positions within 5 blocks of our crafting table
-        BlockPos.iterate(origin.add(-5, -5, -5),
-                        origin.add(5, 5, 5))
+        BlockPos.betweenClosedStream(origin.offset(-5, -5, -5),
+                                     origin.offset(5, 5, 5))
                 .forEach(pos -> {
                     // Make sure we ignore the block we are crafting in
                     if (!pos.equals(origin)) {
-                        BlockEntity nearbyBlockEntity = this.blockEntity.getWorld().getBlockEntity(pos);
-                        if (nearbyBlockEntity instanceof Inventory inv) {
+                        BlockEntity nearbyBlockEntity = this.blockEntity.getLevel().getBlockEntity(pos);
+                        if (nearbyBlockEntity instanceof Container inv) {
                             // If we find a block entity with an inventory, such as a chest, add it to our list
                             inventories.add(inv);
                         }
@@ -107,8 +107,8 @@ Example Implementation:
 This will make the recipe book in our crafting screen able to craft not just from the player's inventory, but also from container blocks like chests or barrels within a 5 block radius.
 
 ### Assumptions made by this API:
-- Your screen handler class extends `AbstractRecipeScreenHandler`, or any of its subclasses, such as `AbstractCraftingScreenHandler`
-- Your corresponding screen extends `RecipeBookScreen`, in order to utilize the minecraft recipe book
+- Your menu class extends `RecipeBookMenu`, or one of its subclasses such as `AbstractCraftingMenu`
+- Your corresponding screen uses Minecraft's recipe book
 - The player's inventory is accessible as a backup for when items are not able to be returned to their Inventory of origin (if the input slots need to be cleared to make way for another recipe)
 
 (_It may be possible to use the API in different scenarios, just know I have not tested outside these assumptions_)

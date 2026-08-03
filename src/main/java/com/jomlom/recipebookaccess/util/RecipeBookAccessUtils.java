@@ -1,60 +1,72 @@
 package com.jomlom.recipebookaccess.util;
 
 import com.jomlom.recipebookaccess.api.RecipeBookInventoryProvider;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.InputSlotFiller;
-import net.minecraft.recipe.RecipeFinder;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.recipebook.ServerPlaceRecipe;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.StackedItemContents;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 public class RecipeBookAccessUtils {
 
-    private static final Map<Slot, Inventory> originMap = new HashMap<>();
+    private static final Map<Slot, Container> originMap = new HashMap<>();
 
-    public static void populateCustomRecipeFinder(RecipeFinder recipeFinder, RecipeBookInventoryProvider customPopulator) {
-        for (Inventory inventory : customPopulator.getInventoriesForAutofill()) {
-            for (int i = 0; i < inventory.size(); i++) {
-                recipeFinder.addInput(inventory.getStack(i));
+    /**
+     * Player inventories expose armor/offhand beyond the main 36 slots.
+     * Crafting autofill should only use the main inventory, matching vanilla.
+     */
+    public static int getUsableSlotCount(Container inv) {
+        if (inv instanceof Inventory) {
+            return Inventory.INVENTORY_SIZE;
+        }
+        return inv.getContainerSize();
+    }
+
+    public static void populateCustomRecipeFinder(StackedItemContents recipeFinder, RecipeBookInventoryProvider customPopulator) {
+        for (Container inventory : customPopulator.getInventoriesForAutofill()) {
+            int size = getUsableSlotCount(inventory);
+            for (int i = 0; i < size; i++) {
+                recipeFinder.accountStack(inventory.getItem(i));
             }
         }
     }
 
-    public static void populateCustomRecipeFinder(RecipeFinder recipeFinder, List<ItemStack> items) {
+    public static void populateCustomRecipeFinder(StackedItemContents recipeFinder, List<ItemStack> items) {
         for (ItemStack itemStack : items) {
-            recipeFinder.addInput(itemStack);
+            recipeFinder.accountStack(itemStack);
         }
     }
 
-    public static int customFillInputSlot(Slot slot, RegistryEntry<Item> item, int count, RecipeBookInventoryProvider customPop) {
-        ItemStack slotStack = slot.getStack();
+    public static int customFillInputSlot(Slot slot, Holder<Item> item, int count, RecipeBookInventoryProvider customPop) {
+        ItemStack slotStack = slot.getItem();
 
-        for (Inventory inv : customPop.getInventoriesForAutofill()) {
+        for (Container inv : customPop.getInventoriesForAutofill()) {
             int matchingIndex = getMatchingSlotForInventory(inv, item, slotStack);
             if (matchingIndex != -1) {
                 originMap.put(slot, inv);
 
-                ItemStack invStack = inv.getStack(matchingIndex);
+                ItemStack invStack = inv.getItem(matchingIndex);
                 ItemStack removedStack;
                 if (count < invStack.getCount()) {
-                    removedStack = inv.removeStack(matchingIndex, count);
+                    removedStack = inv.removeItem(matchingIndex, count);
                 } else {
-                    removedStack = inv.removeStack(matchingIndex);
+                    removedStack = inv.removeItemNoUpdate(matchingIndex);
                 }
 
                 int removedCount = removedStack.getCount();
                 if (slotStack.isEmpty()) {
-                    slot.setStackNoCallbacks(removedStack);
+                    slot.set(removedStack);
                 } else {
-                    slotStack.increment(removedCount);
+                    slotStack.grow(removedCount);
                 }
                 return count - removedCount;
             }
@@ -62,13 +74,14 @@ public class RecipeBookAccessUtils {
         return -1;
     }
 
-    private static int getMatchingSlotForInventory(Inventory inv, RegistryEntry<Item> item, ItemStack stack) {
-        for (int i = 0; i < inv.size(); ++i) {
-            ItemStack currentStack = inv.getStack(i);
+    private static int getMatchingSlotForInventory(Container inv, Holder<Item> item, ItemStack stack) {
+        int size = getUsableSlotCount(inv);
+        for (int i = 0; i < size; ++i) {
+            ItemStack currentStack = inv.getItem(i);
             if (!currentStack.isEmpty()
-                    && currentStack.itemMatches(item)
+                    && currentStack.is(item)
                     && usableWhenFillingSlot(stack)
-                    && (stack.isEmpty() || ItemStack.areItemsAndComponentsEqual(stack, currentStack))) {
+                    && (stack.isEmpty() || ItemStack.isSameItemSameComponents(stack, currentStack))) {
                 return i;
             }
         }
@@ -76,16 +89,16 @@ public class RecipeBookAccessUtils {
     }
 
     private static boolean usableWhenFillingSlot(ItemStack stack) {
-        return !stack.isDamaged() && !stack.hasEnchantments() && !stack.contains(DataComponentTypes.CUSTOM_NAME);
+        return !stack.isDamaged() && !stack.isEnchanted() && !stack.has(DataComponents.CUSTOM_NAME);
     }
 
-    public static ScreenHandler getOuterScreenHandler(InputSlotFiller.Handler<?> handler) {
+    public static AbstractContainerMenu getOuterScreenHandler(ServerPlaceRecipe.CraftingMenuAccess<?> handler) {
         Class<?> clazz = handler.getClass();
         for (Field f : clazz.getDeclaredFields()) {
             f.setAccessible(true);
             try {
                 Object value = f.get(handler);
-                if (value instanceof ScreenHandler screenHandler) {
+                if (value instanceof AbstractContainerMenu screenHandler) {
                     return screenHandler;
                 }
             } catch (Exception e) {
@@ -96,7 +109,7 @@ public class RecipeBookAccessUtils {
     }
 
     public static boolean tryReturnItemToOrigin(Slot slot, ItemStack stack) {
-        Inventory originInventory = originMap.get(slot);
+        Container originInventory = originMap.get(slot);
         if (originInventory != null) {
             boolean inserted = insertStackIntoInventory(originInventory, stack);
             originMap.remove(slot);
@@ -105,26 +118,31 @@ public class RecipeBookAccessUtils {
         return false;
     }
 
-    private static boolean insertStackIntoInventory(Inventory inv, ItemStack stack) {
-        for (int i = 0; i < inv.size(); i++) {
-            ItemStack invStack = inv.getStack(i);
-            if (!invStack.isEmpty() && ItemStack.areItemsAndComponentsEqual(invStack, stack)) {
-                int maxStackSize = Math.min(invStack.getMaxCount(), stack.getMaxCount());
+    private static boolean insertStackIntoInventory(Container inv, ItemStack stack) {
+        if (inv instanceof Inventory playerInventory) {
+            playerInventory.placeItemBackInInventory(stack, false);
+            return stack.isEmpty();
+        }
+
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack invStack = inv.getItem(i);
+            if (!invStack.isEmpty() && ItemStack.isSameItemSameComponents(invStack, stack)) {
+                int maxStackSize = Math.min(invStack.getMaxStackSize(), stack.getMaxStackSize());
                 int availableSpace = maxStackSize - invStack.getCount();
                 if (availableSpace > 0) {
                     int toTransfer = Math.min(availableSpace, stack.getCount());
-                    invStack.increment(toTransfer);
-                    stack.decrement(toTransfer);
+                    invStack.grow(toTransfer);
+                    stack.shrink(toTransfer);
                     if (stack.isEmpty()) {
                         return true;
                     }
                 }
             }
         }
-        for (int i = 0; i < inv.size(); i++) {
-            ItemStack invStack = inv.getStack(i);
-            if (invStack.isEmpty()) {
-                inv.setStack(i, stack.copy());
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack invStack = inv.getItem(i);
+            if (invStack.isEmpty() && inv.canPlaceItem(i, stack)) {
+                inv.setItem(i, stack.copy());
                 stack.setCount(0);
                 return true;
             }

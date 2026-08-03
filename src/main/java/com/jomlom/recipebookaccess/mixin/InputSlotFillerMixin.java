@@ -2,17 +2,6 @@ package com.jomlom.recipebookaccess.mixin;
 
 import com.jomlom.recipebookaccess.api.RecipeBookInventoryProvider;
 import com.jomlom.recipebookaccess.util.RecipeBookAccessUtils;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.InputSlotFiller;
-import net.minecraft.recipe.Recipe;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.recipe.RecipeFinder;
-import net.minecraft.recipe.input.RecipeInput;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -23,74 +12,85 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
+import net.minecraft.core.Holder;
+import net.minecraft.recipebook.ServerPlaceRecipe;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.StackedItemContents;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeInput;
 
-@Mixin(InputSlotFiller.class)
+@Mixin(ServerPlaceRecipe.class)
 public abstract class InputSlotFillerMixin {
 
-    @Final @Shadow private InputSlotFiller.Handler<?> handler;
-    @Final @Shadow private List<Slot> slotsToReturn;
-    @Final @Shadow private PlayerInventory inventory;
+    @Final @Shadow private ServerPlaceRecipe.CraftingMenuAccess<?> menu;
+    @Final @Shadow private List<Slot> slotsToClear;
+    @Final @Shadow private Inventory inventory;
 
     @Redirect(
-            method = "fill(Lnet/minecraft/recipe/InputSlotFiller$Handler;IILjava/util/List;Ljava/util/List;Lnet/minecraft/entity/player/PlayerInventory;Lnet/minecraft/recipe/RecipeEntry;ZZ)Lnet/minecraft/screen/AbstractRecipeScreenHandler$PostFillAction;",
+            method = "placeRecipe(Lnet/minecraft/recipebook/ServerPlaceRecipe$CraftingMenuAccess;IILjava/util/List;Ljava/util/List;Lnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/world/item/crafting/RecipeHolder;ZZ)Lnet/minecraft/world/inventory/RecipeBookMenu$PostPlaceAction;",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/entity/player/PlayerInventory;populateRecipeFinder(Lnet/minecraft/recipe/RecipeFinder;)V"
+                    target = "Lnet/minecraft/world/entity/player/Inventory;fillStackedContents(Lnet/minecraft/world/entity/player/StackedItemContents;)V"
             )
     )
     private static void redirectInventoryPopulate(
-            PlayerInventory inventory,
-            RecipeFinder recipeFinder,
-            InputSlotFiller.Handler<?> handler,
+            Inventory inventory,
+            StackedItemContents recipeFinder,
+            ServerPlaceRecipe.CraftingMenuAccess<?> handler,
             int width, int height,
             List<Slot> inputSlots, List<Slot> slotsToReturn,
-            PlayerInventory inv,
-            RecipeEntry<? extends Recipe<? extends RecipeInput>> recipe,
+            Inventory inv,
+            RecipeHolder<? extends Recipe<? extends RecipeInput>> recipe,
             boolean craftAll, boolean creative
     )    {
-        ScreenHandler screenHandler = RecipeBookAccessUtils.getOuterScreenHandler(handler);
+        AbstractContainerMenu screenHandler = RecipeBookAccessUtils.getOuterScreenHandler(handler);
         if (screenHandler instanceof RecipeBookInventoryProvider customPop) {
             RecipeBookAccessUtils.populateCustomRecipeFinder(recipeFinder, customPop);
         } else {
-            inventory.populateRecipeFinder(recipeFinder);
+            inventory.fillStackedContents(recipeFinder);
         }
     }
 
     @Inject(
-            method = "fillInputSlot",
+            method = "moveItemToGrid",
             at = @At("HEAD"), cancellable = true
     )
     private void onFillInputSlot(
             Slot slot,
-            RegistryEntry<Item> item,
+            Holder<Item> item,
             int count,
             CallbackInfoReturnable<Integer> cir
     ) {
-        ScreenHandler screenHandler = RecipeBookAccessUtils.getOuterScreenHandler(handler);
+        AbstractContainerMenu screenHandler = RecipeBookAccessUtils.getOuterScreenHandler(menu);
         if (screenHandler instanceof RecipeBookInventoryProvider customPop) {
             int customResult = RecipeBookAccessUtils.customFillInputSlot(slot, item, count, customPop);
-            slot.markDirty();
+            slot.setChanged();
             cir.setReturnValue(customResult);
         }
     }
 
     @Inject(
-            method = "returnInputs",
+            method = "clearGrid",
             at = @At("HEAD"),
             cancellable = true
     )
     private void onReturnInputs(CallbackInfo ci) {
-        ScreenHandler screenHandler = RecipeBookAccessUtils.getOuterScreenHandler(handler);
+        AbstractContainerMenu screenHandler = RecipeBookAccessUtils.getOuterScreenHandler(menu);
         if (screenHandler instanceof RecipeBookInventoryProvider) {
-            for (Slot slot : slotsToReturn) {
-                ItemStack stack = slot.getStack().copy();
+            for (Slot slot : slotsToClear) {
+                ItemStack stack = slot.getItem().copy();
                 boolean returned = RecipeBookAccessUtils.tryReturnItemToOrigin(slot, stack);
                 if (!returned) {
-                    inventory.offer(stack, false);
+                    inventory.placeItemBackInInventory(stack, false);
                 }
-                slot.setStackNoCallbacks(stack);
+                slot.set(stack);
             }
-            handler.clear();
+            menu.clearCraftingContent();
             ci.cancel();
         }
     }
